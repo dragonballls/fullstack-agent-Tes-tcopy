@@ -52,7 +52,7 @@ class MultiDeviceMirrorManagerTests(unittest.TestCase):
         self.assertIn("phone-a", first_args)
         self.assertIn("--serial", second_args)
         self.assertIn("phone-b", second_args)
-        self.assertIn("--max-fps", first_args)
+        self.assertIn("--max-fps=60", first_args)
         self.assertIn("--video-codec=h264", first_args)
         self.assertIn("--window-title=Jarvis — Pixel A", first_args)
         self.assertIn("--window-x=0", first_args)
