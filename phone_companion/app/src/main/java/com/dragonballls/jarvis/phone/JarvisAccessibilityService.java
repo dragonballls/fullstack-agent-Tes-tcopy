@@ -15,11 +15,6 @@ public final class JarvisAccessibilityService extends AccessibilityService {
         instance = this;
     }
 
-    @Override
-    public boolean performGlobalAction(int action) {
-        return super.performGlobalAction(action);
-    }
-
     public boolean clickText(String text) {
         if (text == null || text.trim().isEmpty()) return false;
         AccessibilityNodeInfo root = getRootInActiveWindow();
