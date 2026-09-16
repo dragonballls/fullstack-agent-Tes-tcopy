@@ -19,6 +19,26 @@ class FakeProcess:
         return 0
 
 
+class StubbornProcess(FakeProcess):
+    def __init__(self, pid):
+        super().__init__(pid)
+        self.killed = False
+
+    def terminate(self):
+        self.terminated = True
+
+    def wait(self, timeout=None):
+        if not self.killed:
+            raise TimeoutError("process did not exit")
+        return 0
+
+    def kill(self):
+        self.killed = True
+
+    def poll(self):
+        return 0 if self.killed else None
+
+
 class MultiDeviceMirrorManagerTests(unittest.TestCase):
     def test_starts_independent_sessions_for_multiple_devices(self):
         processes = []
@@ -105,6 +125,20 @@ class MultiDeviceMirrorManagerTests(unittest.TestCase):
         manager.stop_all()
         self.assertEqual(manager.active_ids(), ())
         self.assertTrue(all(process.terminated for _, process in processes))
+
+    def test_stop_forces_kill_when_graceful_shutdown_times_out(self):
+        process = StubbornProcess(99)
+        manager = MultiDeviceMirrorManager(scrcpy="scrcpy", launcher=lambda args: process, stop_timeout=0.1)
+
+        started = manager.start("phone-a", "Pixel A")
+        stopped = manager.stop("phone-a")
+
+        self.assertTrue(started.ok)
+        self.assertFalse(stopped.ok)
+        self.assertEqual(stopped.code, "TIMEOUT")
+        self.assertTrue(process.killed)
+        self.assertEqual(manager.active_ids(), ())
+        self.assertIsNone(manager.get("phone-a"))
 
     def test_unavailable_scrcpy_is_explicit(self):
         manager = MultiDeviceMirrorManager(scrcpy=None, launcher=lambda args: None)

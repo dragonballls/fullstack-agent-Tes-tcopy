@@ -18,6 +18,8 @@ class MirrorProcess(Protocol):
 
     def terminate(self) -> None: ...
 
+    def kill(self) -> None: ...
+
     def wait(self, timeout: float | None = None) -> int | None: ...
 
 
@@ -141,6 +143,13 @@ class MultiDeviceMirrorManager:
                 session.process.terminate()
                 session.process.wait(timeout=self._stop_timeout)
             except (OSError, TimeoutError):
+                try:
+                    kill = getattr(session.process, "kill", None)
+                    if callable(kill):
+                        kill()
+                        session.process.wait(timeout=self._stop_timeout)
+                except (OSError, TimeoutError):
+                    pass
                 return DeviceResult.failure("TIMEOUT", "scrcpy did not stop within the configured timeout")
         return DeviceResult.success("live device view stopped", device_id=device_id)
 
