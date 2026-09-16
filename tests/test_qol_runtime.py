@@ -74,6 +74,27 @@ class JarvisRuntimeTests(unittest.TestCase):
         self.assertTrue(screened["result"].ok)
         self.assertEqual(provider.operations[-1][0], "screen")
 
+    def test_show_all_phone_runtime_command(self):
+        provider = FakePhoneProvider()
+        provider.add_device(
+            DeviceState("main-1", "Main Phone", True, 88, True),
+            frozenset({DeviceCapability.STATE_READ, DeviceCapability.SCREEN_VIEW}),
+        )
+        provider.add_device(
+            DeviceState("main-2", "Second Phone", True, 55, False),
+            frozenset({DeviceCapability.STATE_READ, DeviceCapability.SCREEN_VIEW}),
+        )
+        policy = CapabilityPolicy(frozenset({Capability.DEVICE_READ, Capability.DEVICE_SCREEN}))
+        device_tool = lambda: __import__("quality_of_life.devices.runtime", fromlist=["DeviceTool"]).DeviceTool(policy, providers=(provider,))
+        runtime = JarvisRuntime(policy, factories={"devices": device_tool})
+        result = runtime.handle_text("show all my phones")
+        self.assertEqual(result["intent"].kind, "device_screen_all")
+        self.assertEqual([item.code for item in result["result"]], ["OK", "OK"])
+        self.assertEqual(
+            [item[1] for item in provider.operations if item[0] == "screen"],
+            ["main-1", "main-2"],
+        )
+
     def test_runtime_defaults_cloud_router_to_omniroute(self):
         old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}
         try:
