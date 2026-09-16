@@ -76,7 +76,10 @@ class AndroidCompanionClient:
             return DeviceResult.failure("INVALID", "companion returned a non-object response")
         if not bool(data.get("ok")):
             return DeviceResult.failure(str(data.get("code", "ERROR")), str(data.get("message", "companion request failed")), response=data)
-        return DeviceResult.success(str(data.get("message", "companion request completed")), **data)
+        message = str(data.get("message", "companion request completed"))
+        payload_data = dict(data)
+        payload_data.pop("message", None)
+        return DeviceResult.success(message, **payload_data)
 
     def health(self, device_id: str) -> DeviceResult:
         return self.request(device_id, "GET", "/health")
