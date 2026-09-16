@@ -94,6 +94,14 @@ class DeviceTool:
     ) -> DeviceResult:
         return self.automation.run_steps(device_id, steps, confirmed=confirmed)
 
+    def set_hand_target(self, device_id: str | None) -> DeviceResult:
+        """Set or clear the active physical-device hand-control target."""
+        if device_id is None:
+            return DeviceResult.success("hand target cleared")
+        if self.registry.provider_for(device_id) is None:
+            return DeviceResult.failure("NOT_FOUND", "Device is not registered")
+        return DeviceResult.success("hand target selected", device_id=device_id)
+
     def close(self) -> None:
         for provider in self.providers:
             provider.close()
