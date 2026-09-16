@@ -15,3 +15,20 @@ class QoLIntentTests(unittest.TestCase):
         self.assertEqual(move.kind, "computer_action")
         self.assertEqual(move.arguments, {"operation": "move", "x": 100, "y": 200})
         self.assertEqual(parse_intent("hello Jarvis").kind, "chat")
+
+    def test_phone_device_intents(self):
+        for text in ("list my phones", "show my devices"):
+            self.assertEqual(parse_intent(text).kind, "device_list")
+        for text in ("refresh my phones", "scan my devices"):
+            self.assertEqual(parse_intent(text).kind, "device_refresh")
+        selected = parse_intent("switch to my phone Main Phone")
+        self.assertEqual(selected.kind, "device_select")
+        self.assertEqual(selected.arguments["device"], "Main Phone")
+        self.assertEqual(parse_intent("show my phone").kind, "device_screen")
+        screen = parse_intent("view my device Main Phone")
+        self.assertEqual(screen.kind, "device_screen")
+        self.assertEqual(screen.arguments["device"], "Main Phone")
+
+
+if __name__ == "__main__":
+    unittest.main()
