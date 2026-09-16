@@ -25,6 +25,10 @@ _APP_UNINSTALL = re.compile(r"^(?:uninstall|remove\s+(?:the\s+)?(?:program|appli
 _MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
 _HAND_START = re.compile(r"^(?:turn\s+on|enable|start)\s+(?:webcam\s+)?hand\s+control$|^(?:enable|start)\s+(?:webcam\s+)?control$", re.IGNORECASE)
 _HAND_STOP = re.compile(r"^(?:turn\s+off|disable|stop|pause)\s+(?:webcam\s+)?hand\s+control$|^(?:disable|stop)\s+(?:webcam\s+)?control$", re.IGNORECASE)
+_DEVICE_LIST = re.compile(r"^(?:list|show)(?:\s+me)?\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
+_DEVICE_REFRESH = re.compile(r"^(?:refresh|scan|find)\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
+_DEVICE_SELECT = re.compile(r"^(?:switch to|select|use)\s+(?:my\s+)?(?:phone|device)\s+(.+)$", re.IGNORECASE)
+_DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:phone|device)(?:\s+(.+?))?(?:\s+(?:screen|view))?$", re.IGNORECASE)
 
 
 def parse_intent(text: str) -> Intent:
@@ -36,6 +40,19 @@ def parse_intent(text: str) -> Intent:
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):
         return Intent("hand_control_stop", {})
+    if _DEVICE_LIST.match(value):
+        return Intent("device_list", {})
+    if _DEVICE_REFRESH.match(value):
+        return Intent("device_refresh", {})
+    match = _DEVICE_SELECT.match(value)
+    if match:
+        return Intent("device_select", {"device": match.group(1).strip()})
+    match = _DEVICE_SCREEN.match(value)
+    if match:
+        label = (match.group(1) or "").strip()
+        if label.casefold() in {"screen", "view"}:
+            label = ""
+        return Intent("device_screen", {"device": label or None})
     if lowered in {"where am i", "what is my location", "what's my location", "where are we"}:
         return Intent("locate_me", {})
     match = _SAVE_CURRENT.match(value)
@@ -55,7 +72,9 @@ def parse_intent(text: str) -> Intent:
         return Intent("computer_action", {"operation": "move", "x": int(match.group(1)), "y": int(match.group(2))})
     match = _BROWSER.match(value)
     if match:
-        return Intent("browser_open", {"browser": match.group(1), "url": match.group(2)})
+        browser = match.group(1)
+        url = match.group(2)
+        return Intent("browser_open", {"browser": browser, "url": url})
     if _MAINTENANCE.match(value):
         return Intent("windows_maintenance", {"request": value})
     match = _FILE_DELETE.match(value)
