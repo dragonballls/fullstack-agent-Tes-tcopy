@@ -42,7 +42,7 @@ class PhoneFacadeTests(unittest.TestCase):
         results = facade.screen_all()
         self.assertEqual([result.code for result in results], ["OK", "OK"])
         self.assertEqual(
-            [record["device_id"] for record in self.provider.operations if record["operation"] == "screen"],
+            [record[1] for record in self.provider.operations if record[0] == "screen"],
             ["phone", "phone-two"],
         )
 
