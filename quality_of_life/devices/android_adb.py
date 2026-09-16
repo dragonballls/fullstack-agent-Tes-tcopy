@@ -2,7 +2,8 @@
 
 ADB is used only when the user has an authorized Android device and adb is
 available. No emulator is required. scrcpy is an optional companion for a live
-interactive screen because it is designed to display/control a real device.
+interactive screen. The optional Jarvis Android companion adds notification and
+accessibility-backed phone-native actions through an ADB-local forward.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 
+from .android_companion import AndroidCompanionClient
 from .models import DeviceCapability, DeviceResult, DeviceState
 from .provider import DeviceInputEvent, FileTransferDirection
 
@@ -25,10 +27,20 @@ Runner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 class AndroidAdbProvider:
     name = "android-adb"
 
-    def __init__(self, adb: str | None = None, scrcpy: str | None = None, runner: Runner | None = None):
+    def __init__(
+        self,
+        adb: str | None = None,
+        scrcpy: str | None = None,
+        runner: Runner | None = None,
+        enable_companion: bool = True,
+        companion: AndroidCompanionClient | None = None,
+    ):
         self.adb = adb or shutil.which("adb")
         self.scrcpy = scrcpy or shutil.which("scrcpy")
         self._runner = runner or self._run
+        self.companion = companion if companion is not None else (
+            AndroidCompanionClient(self.adb, runner=self._runner) if enable_companion else None
+        )
 
     @staticmethod
     def _run(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -53,14 +65,7 @@ class AndroidAdbProvider:
             if len(parts) < 2:
                 continue
             serial, status = parts[0], parts[1]
-            devices.append(
-                DeviceState(
-                    device_id=serial,
-                    label=serial,
-                    connected=status == "device",
-                    provider=AndroidAdbProvider.name,
-                )
-            )
+            devices.append(DeviceState(device_id=serial, label=serial, connected=status == "device", provider=AndroidAdbProvider.name))
         return tuple(devices)
 
     def list_devices(self) -> Sequence[DeviceState]:
@@ -98,6 +103,14 @@ class AndroidAdbProvider:
         charging = status in {2, 5} if status is not None else None
         return DeviceResult.success("device state available", state=replace(base, battery_percent=level, charging=charging))
 
+    def _companion_available(self, device_id: str) -> bool:
+        if self.companion is None:
+            return False
+        try:
+            return self.companion.health(device_id).ok
+        except Exception:
+            return False
+
     def capabilities(self, device_id: str) -> frozenset[DeviceCapability]:
         state = self._state(device_id)
         if state is None:
@@ -110,6 +123,8 @@ class AndroidAdbProvider:
         }
         if self.scrcpy:
             capabilities.add(DeviceCapability.SCREEN_VIEW)
+        if self._companion_available(device_id):
+            capabilities.add(DeviceCapability.NOTIFICATION_READ)
         return frozenset(capabilities)
 
     def display_size(self, device_id: str) -> tuple[int, int] | None:
@@ -123,9 +138,7 @@ class AndroidAdbProvider:
         if not matches:
             return None
         width, height = map(int, matches[-1])
-        if width <= 0 or height <= 0:
-            return None
-        return width, height
+        return (width, height) if width > 0 and height > 0 else None
 
     def _command(self, device_id: str, *args: str) -> DeviceResult:
         state = self._state(device_id)
@@ -178,7 +191,10 @@ class AndroidAdbProvider:
         return DeviceResult.failure("UNSUPPORTED", f"Unsupported input event: {event.kind}")
 
     def read_notifications(self, device_id: str) -> DeviceResult:
-        return DeviceResult.failure("UNAVAILABLE", "Notification reading requires the Jarvis Android companion; adb alone does not provide a stable general notification API")
+        if self.companion is None:
+            return DeviceResult.failure("UNAVAILABLE", "Jarvis Android companion is not configured")
+        result = self.companion.notifications(device_id)
+        return result
 
     def transfer_file(self, device_id: str, direction: FileTransferDirection, path: str) -> DeviceResult:
         if not path.strip():
@@ -195,4 +211,5 @@ class AndroidAdbProvider:
         return self._command(device_id, "shell", "monkey", "-p", app_id, "1")
 
     def close(self) -> None:
-        return None
+        if self.companion is not None:
+            self.companion.close()
