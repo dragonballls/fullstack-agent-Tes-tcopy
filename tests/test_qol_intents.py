@@ -32,6 +32,10 @@ class QoLIntentTests(unittest.TestCase):
         self.assertEqual(hand.kind, "device_hand_target")
         self.assertEqual(hand.arguments["device"], "Main Phone")
 
+    def test_show_all_phone_screens_intent(self):
+        for text in ("show all my phones", "show all phone screens", "mirror all my phones", "view all my devices"):
+            self.assertEqual(parse_intent(text).kind, "device_screen_all")
+
 
 if __name__ == "__main__":
     unittest.main()
