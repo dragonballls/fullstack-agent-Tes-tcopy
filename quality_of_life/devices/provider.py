@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Protocol, Sequence
 
 from .models import DeviceCapability, DeviceResult, DeviceState
 
@@ -41,6 +41,8 @@ class PhoneDeviceProvider(Protocol):
     def get_state(self, device_id: str) -> DeviceResult: ...
 
     def capabilities(self, device_id: str) -> frozenset[DeviceCapability]: ...
+
+    def display_size(self, device_id: str) -> tuple[int, int] | None: ...
 
     def view_screen(self, device_id: str) -> DeviceResult: ...
 
