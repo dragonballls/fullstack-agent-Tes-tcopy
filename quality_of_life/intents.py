@@ -29,6 +29,7 @@ _DEVICE_HAND = re.compile(r"^(?:use|send|route|target|control)\s+(?:webcam\s+|my
 _DEVICE_LIST = re.compile(r"^(?:list|show)(?:\s+me)?\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
 _DEVICE_REFRESH = re.compile(r"^(?:refresh|scan|find)\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
 _DEVICE_SELECT = re.compile(r"^(?:switch to|select|use)\s+(?:my\s+)?(?:phone|device)(?:\s+(.+))$|^(?:switch to|select|use)\s+(.+?)(?:\s+phone)?$", re.IGNORECASE)
+_DEVICE_SCREEN_ALL = re.compile(r"^(?:show|view|mirror)\s+(?:me\s+)?(?:all|both)\s+(?:my\s+)?(?:phone|phones|device|devices)(?:\s+(?:screen|screens|view|views))?$", re.IGNORECASE)
 _DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:phone|device)(?:\s+(.+?))?(?:\s+(?:screen|view))?$", re.IGNORECASE)
 
 
@@ -51,6 +52,8 @@ def parse_intent(text: str) -> Intent:
     match = _DEVICE_SELECT.match(value)
     if match:
         return Intent("device_select", {"device": (match.group(1) or match.group(2) or "").strip()})
+    if _DEVICE_SCREEN_ALL.match(value):
+        return Intent("device_screen_all", {})
     match = _DEVICE_SCREEN.match(value)
     if match:
         label = (match.group(1) or "").strip()
