@@ -36,6 +36,18 @@ class PhoneRegistryTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.code, "DUPLICATE_ID")
 
+    def test_transient_provider_error_keeps_last_known_devices(self):
+        provider = FakePhoneProvider()
+        provider.add_device(DeviceState("a", "Main", True, 90))
+        registry = DeviceRegistry([provider])
+        self.assertTrue(registry.refresh().ok)
+        original = provider.list_devices
+        provider.list_devices = lambda: (_ for _ in ()).throw(RuntimeError("temporary"))
+        result = registry.refresh()
+        self.assertTrue(result.ok)
+        self.assertEqual([d.device_id for d in registry.list()], ["a"])
+        provider.list_devices = original
+
 
 if __name__ == "__main__":
     unittest.main()
