@@ -54,6 +54,13 @@ class JarvisRuntime:
             return lambda: target()
         if name in {"files", "applications", "processes", "system"}:
             return lambda: target(self.policy)
+        if name == "devices":
+            def device_confirmation(operation: str) -> bool:
+                if self.confirmation is None:
+                    return False
+                capability = QoLOrchestrator.policy_operation_capability(operation)
+                return self.confirmation(capability, operation)
+            return lambda: target(self.policy, confirmation=device_confirmation)
         if name == "scheduler":
             return lambda: target(self._tool("background"))
         if name == "gods_eye":
@@ -192,70 +199,42 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.get", lambda name: self._tool("locations").get(name)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.list", lambda: self._tool("locations").list()))
         self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.delete", lambda name, confirmed=False: self._delete_saved_location(name, confirmed=confirmed)))
-        self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
-        self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
 
-    def _start_hand_control(self) -> dict[str, object]:
-        runtime = self._tool("hand_control_runtime")
-        started = runtime.start()
-        return {"enabled": bool(started and runtime.enabled), "url": runtime.url, "started": bool(started)}
+    def _start_hand_control(self) -> Any:
+        return self._tool("hand_control").start()
 
-    def _stop_hand_control(self) -> dict[str, object]:
-        runtime = self._tool("hand_control_runtime")
-        runtime.stop()
-        return {"enabled": False, "url": runtime.url, "stopped": True}
+    def _stop_hand_control(self) -> Any:
+        return self._tool("hand_control").stop()
 
-    def _account_provider(self, provider: str | ServiceProvider) -> ServiceProvider:
-        if isinstance(provider, ServiceProvider):
-            return provider
-        try:
-            return ServiceProvider(str(provider).strip().lower())
-        except ValueError as exc:
-            raise ValueError(f"unsupported account provider: {provider}") from exc
+    def _select_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").select_account(provider, account_id=account_id, label=label)
 
-    def _select_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        identity = self._tool("account_manager").select_account(self._account_provider(provider), account_id=account_id, label=label)
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value}
+    def _connect_account(self, provider: str, *, login_hint: str | None = None) -> Any:
+        return self._tool("account_manager").connect(provider, login_hint=login_hint)
 
-    def _connect_account(self, provider: str | ServiceProvider, *, login_hint: str | None = None) -> dict[str, str]:
-        connection = self._tool("account_manager").connect_account(self._account_provider(provider), login_hint=login_hint)
-        identity = connection.identity
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": connection.authorization_state}
+    def _refresh_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").refresh(provider, account_id=account_id, label=label)
 
-    def _refresh_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        identity = self._tool("account_manager").refresh_account(self._account_provider(provider), account_id=account_id, label=label)
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value, "refreshed": "true"}
+    def _disconnect_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").disconnect(provider, account_id=account_id, label=label)
 
-    def _disconnect_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        normalized = self._account_provider(provider)
-        selected = self._tool("account_manager").select_account(normalized, account_id=account_id, label=label)
-        self._tool("account_manager").disconnect_account(normalized, account_id=selected.account_id)
-        return {"provider": normalized.value, "account_id": selected.account_id, "disconnected": "true"}
+    def _service_account_action(self, operation: str, provider: str, *, account_id: str | None = None, label: str | None = None, payload: dict[str, Any] | None = None, confirmed: bool = False) -> Any:
+        return self._tool("account_manager").service_action(operation, provider, account_id=account_id, label=label, payload=payload, confirmed=confirmed)
 
-    def _service_account_action(self, operation: str, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None, payload: dict[str, Any] | None = None, confirmed: bool = False) -> Any:
-        return self._tool("account_manager").service_action(operation, provider=self._account_provider(provider), account_id=account_id, label=label, payload=payload, confirmed=confirmed)
+    def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> Any:
+        return self._tool("account_access").github_fork(repository, account_id=account_id, organization=organization)
 
-    def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
-        from .account_access import GitHubRepositoryClient
-        return GitHubRepositoryClient().fork_repository(repository, account_id=account_id, access=self._tool("account_access"), confirmed=True, organization=organization)
-
-    def _first_place(self, query: str) -> tuple[GodsEye, Place]:
-        eye = self._tool("gods_eye")
-        places = eye.search(query)
+    def _first_place(self, query: str) -> tuple[Any, Place]:
+        places = self._tool("gods_eye").search(query)
         if not places:
-            raise LookupError(f"No location found for: {query}")
-        return eye, places[0]
+            raise LookupError(f"No place found for: {query}")
+        return query, places[0]
 
-    def _open_place(self, query: str) -> dict[str, object]:
-        eye, place = self._first_place(query)
-        return eye.open_place(place)
+    def _open_place(self, query: str) -> Any:
+        return self._tool("gods_eye").open_place(query)
 
-    def _route_to(self, query: str) -> dict[str, object]:
-        eye, place = self._first_place(query)
-        snapshot = eye.locate_me()
-        if not snapshot.permitted or snapshot.point is None:
-            raise PermissionError("Current location is unavailable; enable location access before routing")
-        return eye.route(snapshot.point, place)
+    def _route_to(self, query: str) -> Any:
+        return self._tool("gods_eye").route_to(query)
 
     def _save_location(self, name: str, latitude: float, longitude: float, *, address: str | None = None, accuracy_m: float | None = None, source: str = "user", confirmed: bool = False) -> Any:
         if not confirmed:
