@@ -42,6 +42,17 @@ class SelfCodingTests(unittest.TestCase):
         status = subprocess.run(("git", "status", "--porcelain"), cwd=root, check=True, capture_output=True, text=True)
         self.assertEqual(status.stdout, "")
 
+    def test_rollback_failure_is_reported(self) -> None:
+        root = self.make_repo()
+        agent = SelfCodingAgent(SelfCodingConfig(repo=root))
+
+        def failed_git(*args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(["git", *args], 1, "", "reset failed")
+
+        agent._git = failed_git  # type: ignore[method-assign]
+        with self.assertRaisesRegex(SelfCodingError, "Rollback failed while resetting"):
+            agent._rollback("deadbeef")
+
     def test_successful_pass_is_committed(self) -> None:
         root = self.make_repo()
         config = SelfCodingConfig(
