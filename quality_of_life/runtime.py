@@ -249,17 +249,23 @@ class JarvisRuntime:
     def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> Any:
         return self._tool("account_access").github_fork(repository, account_id=account_id, organization=organization)
 
-    def _first_place(self, query: str) -> tuple[Any, Place]:
-        places = self._tool("gods_eye").search(query)
+    def _first_place(self, query: str) -> tuple[GodsEye, Place]:
+        eye = self._tool("gods_eye")
+        places = eye.search(query)
         if not places:
-            raise LookupError(f"No place found for: {query}")
-        return query, places[0]
+            raise LookupError(f"No location found for: {query}")
+        return eye, places[0]
 
-    def _open_place(self, query: str) -> Any:
-        return self._tool("gods_eye").open_place(query)
+    def _open_place(self, query: str) -> dict[str, object]:
+        eye, place = self._first_place(query)
+        return eye.open_place(place)
 
-    def _route_to(self, query: str) -> Any:
-        return self._tool("gods_eye").route_to(query)
+    def _route_to(self, query: str) -> dict[str, object]:
+        eye, place = self._first_place(query)
+        snapshot = eye.locate_me()
+        if not snapshot.permitted or snapshot.point is None:
+            raise PermissionError("Current location is unavailable; enable location access before routing")
+        return eye.route(snapshot.point, place)
 
     def _save_location(self, name: str, latitude: float, longitude: float, *, address: str | None = None, accuracy_m: float | None = None, source: str = "user", confirmed: bool = False) -> Any:
         if not confirmed:
