@@ -199,6 +199,17 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.get", lambda name: self._tool("locations").get(name)))
         self.orchestrator.register(Action(Capability.LOCATION_READ, "locations.list", lambda: self._tool("locations").list()))
         self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.delete", lambda name, confirmed=False: self._delete_saved_location(name, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.list", lambda: self._tool("devices").list()))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.refresh", lambda: self._tool("devices").refresh()))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.state", lambda device_id: self._tool("devices").state(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.select", lambda device_id: self._tool("devices").select(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.active", lambda: self._tool("devices").active()))
+        self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen", lambda device_id: self._tool("devices").screen(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.input", lambda device_id, kind, **kwargs: self._tool("devices").input(device_id, kind, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_NOTIFICATIONS, "devices.notifications", lambda device_id: self._tool("devices").notifications(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_FILES, "devices.files", lambda device_id, direction, path, confirmed=False: self._tool("devices").transfer(device_id, direction, path, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, confirmed=False: self._tool("devices").open_app(device_id, app_id, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, confirmed=False: self._tool("devices").automate(device_id, steps, confirmed=confirmed)))
 
     def _start_hand_control(self) -> Any:
         return self._tool("hand_control").start()
@@ -253,6 +264,21 @@ class JarvisRuntime:
             raise PermissionError("Deleting a saved location requires confirmation")
         return self._tool("locations").delete(name)
 
+    def _resolve_device(self, reference: str) -> str:
+        value = reference.strip()
+        if not value:
+            raise ValueError("device reference must not be empty")
+        devices = list(self._tool("devices").list())
+        exact = [d for d in devices if d.device_id == value]
+        if exact:
+            return exact[0].device_id
+        matches = [d for d in devices if d.label.casefold() == value.casefold()]
+        if len(matches) == 1:
+            return matches[0].device_id
+        if len(matches) > 1:
+            raise ValueError(f"Multiple devices match: {reference}")
+        raise LookupError(f"No device found for: {reference}")
+
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
 
@@ -269,6 +295,23 @@ class JarvisRuntime:
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.start")}
         if intent.kind == "hand_control_stop":
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")}
+        if intent.kind == "device_list":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.list")}
+        if intent.kind == "device_refresh":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.refresh")}
+        if intent.kind == "device_select":
+            device_id = self._resolve_device(str(intent.arguments["device"]))
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.select", device_id)}
+        if intent.kind == "device_screen":
+            reference = intent.arguments.get("device")
+            if reference:
+                device_id = self._resolve_device(str(reference))
+            else:
+                active = self.dispatch(Capability.DEVICE_READ, "devices.active")
+                if not active.ok:
+                    return {"intent": intent, "result": active}
+                device_id = active.data["state"].device_id
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_SCREEN, "devices.screen", device_id)}
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")
