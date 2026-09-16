@@ -25,9 +25,10 @@ _APP_UNINSTALL = re.compile(r"^(?:uninstall|remove\s+(?:the\s+)?(?:program|appli
 _MAINTENANCE = re.compile(r"^(?:diagnose|check|repair|fix|optimize|clean up|stop|prevent|disable).*(?:pc|computer|windows|steam|startup|background|cpu|ram|gpu|network|system files)", re.IGNORECASE)
 _HAND_START = re.compile(r"^(?:turn\s+on|enable|start)\s+(?:webcam\s+)?hand\s+control$|^(?:enable|start)\s+(?:webcam\s+)?control$", re.IGNORECASE)
 _HAND_STOP = re.compile(r"^(?:turn\s+off|disable|stop|pause)\s+(?:webcam\s+)?hand\s+control$|^(?:disable|stop)\s+(?:webcam\s+)?control$", re.IGNORECASE)
+_DEVICE_HAND = re.compile(r"^(?:use|send|route|target|control)\s+(?:webcam\s+|my\s+)?(?:hand\s+control|hands?)\s+(?:on|for|to)\s+(?:my\s+)?(?:phone|device)(?:\s+(.+))?$", re.IGNORECASE)
 _DEVICE_LIST = re.compile(r"^(?:list|show)(?:\s+me)?\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
 _DEVICE_REFRESH = re.compile(r"^(?:refresh|scan|find)\s+(?:my\s+)?(?:phones|devices)$", re.IGNORECASE)
-_DEVICE_SELECT = re.compile(r"^(?:switch to|select|use)\s+(?:my\s+)?(?:phone|device)\s+(.+)$", re.IGNORECASE)
+_DEVICE_SELECT = re.compile(r"^(?:switch to|select|use)\s+(?:my\s+)?(?:phone|device)(?:\s+(.+))$|^(?:switch to|select|use)\s+(.+?)(?:\s+phone)?$", re.IGNORECASE)
 _DEVICE_SCREEN = re.compile(r"^(?:show|view)\s+(?:me\s+)?(?:(?:my|the)\s+)?(?:phone|device)(?:\s+(.+?))?(?:\s+(?:screen|view))?$", re.IGNORECASE)
 
 
@@ -40,13 +41,16 @@ def parse_intent(text: str) -> Intent:
         return Intent("hand_control_start", {})
     if _HAND_STOP.match(value):
         return Intent("hand_control_stop", {})
+    match = _DEVICE_HAND.match(value)
+    if match:
+        return Intent("device_hand_target", {"device": (match.group(1) or "").strip() or None})
     if _DEVICE_LIST.match(value):
         return Intent("device_list", {})
     if _DEVICE_REFRESH.match(value):
         return Intent("device_refresh", {})
     match = _DEVICE_SELECT.match(value)
     if match:
-        return Intent("device_select", {"device": match.group(1).strip()})
+        return Intent("device_select", {"device": (match.group(1) or match.group(2) or "").strip()})
     match = _DEVICE_SCREEN.match(value)
     if match:
         label = (match.group(1) or "").strip()
