@@ -56,6 +56,9 @@ class DeviceTool:
     def screen(self, device_id: str) -> DeviceResult:
         return self.facade.screen(device_id)
 
+    def screen_all(self) -> tuple[DeviceResult, ...]:
+        return self.facade.screen_all()
+
     def input(
         self,
         device_id: str,

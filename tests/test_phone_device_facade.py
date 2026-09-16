@@ -28,6 +28,24 @@ class PhoneFacadeTests(unittest.TestCase):
         self.assertTrue(self.facade.state("phone").ok)
         self.assertTrue(self.facade.screen("phone").ok)
 
+    def test_screen_all_starts_every_connected_phone(self):
+        self.provider.add_device(
+            DeviceState("phone-two", "Second Phone", True, 70),
+            frozenset({DeviceCapability.STATE_READ, DeviceCapability.SCREEN_VIEW}),
+        )
+        registry = DeviceRegistry([self.provider])
+        registry.refresh()
+        facade = DeviceFacade(
+            registry,
+            CapabilityPolicy(allowed=frozenset({Capability.DEVICE_READ, Capability.DEVICE_SCREEN})),
+        )
+        results = facade.screen_all()
+        self.assertEqual([result.code for result in results], ["OK", "OK"])
+        self.assertEqual(
+            [record[1] for record in self.provider.operations if record[0] == "screen"],
+            ["phone", "phone-two"],
+        )
+
     def test_mutation_requires_permission(self):
         facade = DeviceFacade(
             self.facade.registry,

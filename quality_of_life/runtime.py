@@ -211,6 +211,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.select", lambda device_id: self._tool("devices").select(device_id)))
         self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.active", lambda: self._tool("devices").active()))
         self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen", lambda device_id: self._tool("devices").screen(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen_all", lambda: self._tool("devices").screen_all()))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.input", lambda device_id, kind, **kwargs: self._tool("devices").input(device_id, kind, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_NOTIFICATIONS, "devices.notifications", lambda device_id: self._tool("devices").notifications(device_id)))
         self.orchestrator.register(Action(Capability.DEVICE_FILES, "devices.files", lambda device_id, direction, path, **kwargs: self._tool("devices").transfer(device_id, direction, path, confirmed=True, **kwargs)))
@@ -325,6 +326,8 @@ class JarvisRuntime:
         if intent.kind == "device_select":
             device_id = self._resolve_device(str(intent.arguments["device"]))
             return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.select", device_id)}
+        if intent.kind == "device_screen_all":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_SCREEN, "devices.screen_all")}
         if intent.kind == "device_screen":
             reference = intent.arguments.get("device")
             if reference:

@@ -52,6 +52,19 @@ class DeviceFacade:
         self._check(Capability.DEVICE_SCREEN, "devices.screen")
         return self._provider(device_id).view_screen(device_id)
 
+    def screen_all(self) -> tuple[DeviceResult, ...]:
+        """Open a live mirror for every currently connected registered device."""
+        self.policy.check(Capability.DEVICE_SCREEN)
+        results: list[DeviceResult] = []
+        for device in self.registry.list():
+            if not device.connected:
+                continue
+            try:
+                results.append(self._provider(device.device_id).view_screen(device.device_id))
+            except Exception as exc:
+                results.append(DeviceResult.failure("DEVICE_ERROR", f"Unable to open {device.label}: {exc}"))
+        return tuple(results)
+
     def input(self, device_id: str, event: DeviceInputEvent, confirmed: bool = False) -> DeviceResult:
         self._check(Capability.DEVICE_INPUT, "devices.input", confirmed)
         return self._provider(device_id).send_input(device_id, event)
