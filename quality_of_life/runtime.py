@@ -71,7 +71,11 @@ class JarvisRuntime:
         if name == "hand_control_runtime":
             return lambda: target()
         if name == "hand_control":
-            return lambda: target(enabled=False, controller=self._tool("computer"))
+            return lambda: target(
+                enabled=False,
+                controller=self._tool("computer"),
+                device_adapter=self._tool("devices").input_adapter,
+            )
         if name == "hand_control_server":
             return lambda: target
         if name == "background":
@@ -210,12 +214,19 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_FILES, "devices.files", lambda device_id, direction, path, **kwargs: self._tool("devices").transfer(device_id, direction, path, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, **kwargs: self._tool("devices").open_app(device_id, app_id, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
 
     def _start_hand_control(self) -> Any:
         return self._tool("hand_control").start()
 
     def _stop_hand_control(self) -> Any:
         return self._tool("hand_control").stop()
+
+    def _set_hand_target(self, device_id: str | None) -> Any:
+        if device_id is not None and self._tool("devices").registry.provider_for(device_id) is None:
+            raise LookupError(f"No device found for: {device_id}")
+        self._tool("hand_control").set_device_target(device_id)
+        return {"target_device_id": device_id}
 
     def _select_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
         return self._tool("account_manager").select_account(provider, account_id=account_id, label=label)
@@ -295,6 +306,10 @@ class JarvisRuntime:
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.start")}
         if intent.kind == "hand_control_stop":
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")}
+        if intent.kind == "device_hand_target":
+            reference = intent.arguments.get("device")
+            device_id = self._resolve_device(str(reference)) if reference else None
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_INPUT, "devices.hand_target", device_id)}
         if intent.kind == "device_list":
             return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.list")}
         if intent.kind == "device_refresh":
