@@ -9,6 +9,7 @@ from ..permissions import CapabilityPolicy
 from .android_adb import AndroidAdbProvider
 from .automation import DeviceAutomation
 from .facade import DeviceFacade
+from .input_adapter import DeviceInputAdapter
 from .models import DeviceResult
 from .phone_link import PhoneLinkProvider
 from .provider import DeviceInputEvent, FileTransferDirection
@@ -33,6 +34,7 @@ class DeviceTool:
         self.providers = providers if providers is not None else (AndroidAdbProvider(), PhoneLinkProvider())
         self.registry = DeviceRegistry(self.providers)
         self.facade = DeviceFacade(self.registry, policy, confirmation)
+        self.input_adapter = DeviceInputAdapter(self.facade)
         self.automation = DeviceAutomation(self.facade, policy)
         self.registry.refresh()
 
@@ -95,12 +97,10 @@ class DeviceTool:
         return self.automation.run_steps(device_id, steps, confirmed=confirmed)
 
     def set_hand_target(self, device_id: str | None) -> DeviceResult:
-        """Set or clear the active physical-device hand-control target."""
-        if device_id is None:
-            return DeviceResult.success("hand target cleared")
-        if self.registry.provider_for(device_id) is None:
+        """Validate a physical device hand-control target before binding it."""
+        if device_id is not None and self.registry.provider_for(device_id) is None:
             return DeviceResult.failure("NOT_FOUND", "Device is not registered")
-        return DeviceResult.success("hand target selected", device_id=device_id)
+        return DeviceResult.success("hand target validated", device_id=device_id)
 
     def close(self) -> None:
         for provider in self.providers:
