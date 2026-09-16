@@ -38,6 +38,13 @@ class Capability(str, Enum):
     CLOUD_ROUTING = "cloud.routing"
     SYSTEM_DIAGNOSTICS = "system.diagnostics"
     SYSTEM_MAINTENANCE = "system.maintenance"
+    DEVICE_READ = "device.read"
+    DEVICE_SCREEN = "device.screen"
+    DEVICE_INPUT = "device.input"
+    DEVICE_NOTIFICATIONS = "device.notifications"
+    DEVICE_FILES = "device.files"
+    DEVICE_APPS = "device.apps"
+    DEVICE_AUTOMATION = "device.automation"
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,10 @@ class CapabilityPolicy:
         Capability.SYSTEM_SETTINGS,
         Capability.BACKGROUND_JOBS,
         Capability.SYSTEM_MAINTENANCE,
+        Capability.DEVICE_INPUT,
+        Capability.DEVICE_FILES,
+        Capability.DEVICE_APPS,
+        Capability.DEVICE_AUTOMATION,
     })
 
     def check(self, capability: Capability) -> None:
