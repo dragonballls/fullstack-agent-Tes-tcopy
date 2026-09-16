@@ -1,0 +1,31 @@
+name: Android phone companion
+
+on:
+  pull_request:
+    paths:
+      - 'phone_companion/**'
+      - '.github/workflows/android-companion.yml'
+  push:
+    branches:
+      - main
+      - 'feat/jarvis-phone-devices'
+    paths:
+      - 'phone_companion/**'
+      - '.github/workflows/android-companion.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: phone_companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10'
+      - run: gradle --no-daemon assembleDebug
