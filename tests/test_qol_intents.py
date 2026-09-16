@@ -28,6 +28,9 @@ class QoLIntentTests(unittest.TestCase):
         screen = parse_intent("view my device Main Phone")
         self.assertEqual(screen.kind, "device_screen")
         self.assertEqual(screen.arguments["device"], "Main Phone")
+        hand = parse_intent("use hand control on my phone Main Phone")
+        self.assertEqual(hand.kind, "device_hand_target")
+        self.assertEqual(hand.arguments["device"], "Main Phone")
 
 
 if __name__ == "__main__":
