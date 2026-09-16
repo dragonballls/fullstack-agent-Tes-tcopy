@@ -30,7 +30,7 @@ class DeviceTool:
         providers: tuple[Any, ...] | None = None,
     ) -> None:
         self.policy = policy
-        self.providers = providers or (AndroidAdbProvider(), PhoneLinkProvider())
+        self.providers = providers if providers is not None else (AndroidAdbProvider(), PhoneLinkProvider())
         self.registry = DeviceRegistry(self.providers)
         self.facade = DeviceFacade(self.registry, policy, confirmation)
         self.automation = DeviceAutomation(self.facade, policy)
