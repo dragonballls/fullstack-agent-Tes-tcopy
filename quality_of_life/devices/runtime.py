@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..permissions import Capability, CapabilityPolicy
+from ..permissions import CapabilityPolicy
 from .android_adb import AndroidAdbProvider
 from .facade import DeviceFacade
 from .models import DeviceResult
+from .phone_link import PhoneLinkProvider
 from .provider import DeviceInputEvent, FileTransferDirection
 from .registry import DeviceRegistry
 
@@ -16,9 +17,9 @@ from .registry import DeviceRegistry
 class DeviceTool:
     """Lazy physical-device service used by the Jarvis runtime.
 
-    ADB is optional: when absent, the tool still loads and reports that no
-    direct Android transport is available. A caller can inject providers for
-    tests or future Windows Phone Link integrations.
+    Direct ADB control is the primary real-device transport. Phone Link is
+    registered as a capability-driven Windows transport boundary. Neither
+    transport is mandatory for startup or CI.
     """
 
     def __init__(
@@ -28,7 +29,8 @@ class DeviceTool:
         providers: tuple[Any, ...] | None = None,
     ) -> None:
         self.policy = policy
-        self.registry = DeviceRegistry(providers or (AndroidAdbProvider(),))
+        self.providers = providers or (AndroidAdbProvider(), PhoneLinkProvider())
+        self.registry = DeviceRegistry(self.providers)
         self.facade = DeviceFacade(self.registry, policy, confirmation)
         self.registry.refresh()
 
@@ -50,13 +52,29 @@ class DeviceTool:
     def screen(self, device_id: str) -> DeviceResult:
         return self.facade.screen(device_id)
 
-    def input(self, device_id: str, kind: str, *, x: float | None = None, y: float | None = None, text: str | None = None, amount: float | None = None, confirmed: bool = False) -> DeviceResult:
-        return self.facade.input(device_id, DeviceInputEvent(kind, x=x, y=y, text=text, amount=amount), confirmed=confirmed)
+    def input(
+        self,
+        device_id: str,
+        kind: str,
+        *,
+        x: float | None = None,
+        y: float | None = None,
+        text: str | None = None,
+        amount: float | None = None,
+        confirmed: bool = False,
+    ) -> DeviceResult:
+        return self.facade.input(
+            device_id,
+            DeviceInputEvent(kind, x=x, y=y, text=text, amount=amount),
+            confirmed=confirmed,
+        )
 
     def notifications(self, device_id: str) -> DeviceResult:
         return self.facade.notifications(device_id)
 
-    def transfer(self, device_id: str, direction: str, path: str, confirmed: bool = False) -> DeviceResult:
+    def transfer(
+        self, device_id: str, direction: str, path: str, confirmed: bool = False
+    ) -> DeviceResult:
         try:
             transfer_direction = FileTransferDirection(direction)
         except ValueError:
@@ -67,7 +85,5 @@ class DeviceTool:
         return self.facade.open_app(device_id, app_id, confirmed=confirmed)
 
     def close(self) -> None:
-        for device in tuple(self.registry.list()):
-            provider = self.registry.provider_for(device.device_id)
-            if provider is not None:
-                provider.close()
+        for provider in self.providers:
+            provider.close()
