@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from ..permissions import CapabilityPolicy
 from .android_adb import AndroidAdbProvider
+from .automation import DeviceAutomation
 from .facade import DeviceFacade
 from .models import DeviceResult
 from .phone_link import PhoneLinkProvider
@@ -32,6 +33,7 @@ class DeviceTool:
         self.providers = providers or (AndroidAdbProvider(), PhoneLinkProvider())
         self.registry = DeviceRegistry(self.providers)
         self.facade = DeviceFacade(self.registry, policy, confirmation)
+        self.automation = DeviceAutomation(self.facade, policy)
         self.registry.refresh()
 
     def refresh(self) -> DeviceResult:
@@ -83,6 +85,14 @@ class DeviceTool:
 
     def open_app(self, device_id: str, app_id: str, confirmed: bool = False) -> DeviceResult:
         return self.facade.open_app(device_id, app_id, confirmed=confirmed)
+
+    def automate(
+        self,
+        device_id: str,
+        steps: Iterable[Mapping[str, object]],
+        confirmed: bool = False,
+    ) -> DeviceResult:
+        return self.automation.run_steps(device_id, steps, confirmed=confirmed)
 
     def close(self) -> None:
         for provider in self.providers:
