@@ -11,6 +11,7 @@ class PhoneDevicePermissionTests(unittest.TestCase):
             "devices.state": Capability.DEVICE_READ,
             "devices.select": Capability.DEVICE_READ,
             "devices.screen": Capability.DEVICE_SCREEN,
+            "devices.screen_all": Capability.DEVICE_SCREEN,
             "devices.input": Capability.DEVICE_INPUT,
             "devices.notifications": Capability.DEVICE_NOTIFICATIONS,
             "devices.files": Capability.DEVICE_FILES,
@@ -22,6 +23,7 @@ class PhoneDevicePermissionTests(unittest.TestCase):
             self.assertEqual(spec.capability, capability)
         self.assertEqual(operation("devices.input").risk, OperationRisk.MUTATE)
         self.assertEqual(operation("devices.screen").risk, OperationRisk.READ)
+        self.assertEqual(operation("devices.screen_all").risk, OperationRisk.READ)
 
     def test_mutating_device_capabilities_require_confirmation(self):
         policy = CapabilityPolicy(allowed=frozenset({Capability.DEVICE_INPUT, Capability.DEVICE_FILES, Capability.DEVICE_APPS, Capability.DEVICE_AUTOMATION}))
