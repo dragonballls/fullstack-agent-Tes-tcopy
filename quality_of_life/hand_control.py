@@ -1,8 +1,9 @@
-"""Optional webcam hand-control bridge for Jarvis desktop input.
+"""Optional webcam hand-control bridge for Jarvis desktop or device input.
 
-The browser-facing tracker only produces normalized gesture events.  This
-module owns the safety policy and translates those events into the existing
-ComputerController interface, so camera failures cannot affect the base agent.
+The browser-facing tracker only produces normalized gesture events. This
+module owns the safety policy and translates those events into either the
+existing ComputerController interface or a provider-neutral physical-device
+input adapter.
 """
 
 from __future__ import annotations
@@ -34,13 +35,7 @@ class HandEvent:
 class HandGestureInterpreter:
     """Convert stable hand poses into low-frequency, normalized input events."""
 
-    def __init__(
-        self,
-        *,
-        min_confidence: float = 0.80,
-        click_cooldown_s: float = 0.35,
-        move_deadzone: float = 0.003,
-    ) -> None:
+    def __init__(self, *, min_confidence: float = 0.80, click_cooldown_s: float = 0.35, move_deadzone: float = 0.003) -> None:
         if not 0.0 <= min_confidence <= 1.0:
             raise ValueError("min_confidence must be between 0 and 1")
         if click_cooldown_s < 0:
@@ -64,47 +59,39 @@ class HandGestureInterpreter:
 
     @staticmethod
     def _valid(sample: HandSample) -> bool:
-        return (
-            0.0 <= sample.x <= 1.0
-            and 0.0 <= sample.y <= 1.0
-            and 0 <= sample.fingers <= 5
-            and math.isfinite(sample.confidence)
-        )
+        return 0.0 <= sample.x <= 1.0 and 0.0 <= sample.y <= 1.0 and 0 <= sample.fingers <= 5 and math.isfinite(sample.confidence)
 
     def interpret(self, sample: HandSample, *, timestamp: float | None = None) -> tuple[HandEvent, ...]:
         now = time.monotonic() if timestamp is None else timestamp
         previous = self._previous
         self._previous = sample
-
         if not self._enabled or not self._valid(sample) or sample.confidence < self.min_confidence:
             return ()
-
-        # A closed fist is a local emergency stop for hand-driven input.
         if sample.fingers == 0:
             self.disable()
             return (HandEvent(kind="pause"),)
-
         events: list[HandEvent] = []
         if sample.fingers == 1:
             moved = previous is None or abs(sample.x - previous.x) >= self.move_deadzone or abs(sample.y - previous.y) >= self.move_deadzone
             if moved:
                 events.append(HandEvent(kind="move", x=sample.x, y=sample.y))
-
-        # Click is edge-triggered: pinch starts, release completes one click.
-        if previous is not None and previous.pinch and not sample.pinch:
-            if now - self._last_click >= self.click_cooldown_s:
-                self._last_click = now
-                events.append(HandEvent(kind="click"))
-
+        if previous is not None and previous.pinch and not sample.pinch and now - self._last_click >= self.click_cooldown_s:
+            self._last_click = now
+            events.append(HandEvent(kind="click"))
         return tuple(events)
 
 
 class HandControlBridge:
-    """Guarded adapter from HandEvents to the existing computer controller."""
+    """Guarded adapter from HandEvents to desktop or physical-device input."""
 
-    def __init__(self, *, enabled: bool = False, controller: Any | None = None) -> None:
+    def __init__(self, *, enabled: bool = False, controller: Any | None = None, device_adapter: Any | None = None, target_device_id: str | None = None) -> None:
         self.enabled = enabled
         self.controller = controller
+        self.device_adapter = device_adapter
+        self.target_device_id = target_device_id
+
+    def set_device_target(self, device_id: str | None) -> None:
+        self.target_device_id = device_id
 
     def enable(self) -> None:
         self.enabled = True
@@ -124,25 +111,27 @@ class HandControlBridge:
         return round(x * max(width - 1, 0)), round(y * max(height - 1, 0))
 
     def dispatch(self, event: HandEvent) -> bool:
-        if not self.enabled or self.controller is None:
+        if not self.enabled:
             return False
-
         if event.kind == "pause":
             self.disable()
             return True
-
+        if self.target_device_id is not None:
+            if self.device_adapter is None:
+                return False
+            result = self.device_adapter.route_hand_event(self.target_device_id, event, confirmed=True)
+            return bool(getattr(result, "ok", False))
+        if self.controller is None:
+            return False
         if event.kind == "move":
             width, height = self.controller.pyautogui.size()
             x, y = self._screen_coordinates(float(event.x), float(event.y), int(width), int(height))
             self.controller.move(x, y)
             return True
-
         if event.kind == "click":
             self.controller.click(button=event.button)
             return True
-
         if event.kind == "scroll":
             self.controller.scroll(event.amount)
             return True
-
         return False
