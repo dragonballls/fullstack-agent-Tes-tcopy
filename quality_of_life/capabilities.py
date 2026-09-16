@@ -76,6 +76,7 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("devices.select", Capability.DEVICE_READ, OperationRisk.MUTATE, "Select the active physical device"),
     OperationSpec("devices.active", Capability.DEVICE_READ, OperationRisk.READ, "Read the active physical device"),
     OperationSpec("devices.screen", Capability.DEVICE_SCREEN, OperationRisk.READ, "View the actual device screen when supported"),
+    OperationSpec("devices.screen_all", Capability.DEVICE_SCREEN, OperationRisk.READ, "View all connected device screens when supported"),
     OperationSpec("devices.input", Capability.DEVICE_INPUT, OperationRisk.MUTATE, "Send an input event to a physical device"),
     OperationSpec("devices.hand_target", Capability.DEVICE_INPUT, OperationRisk.MUTATE, "Route webcam hand control to a physical device"),
     OperationSpec("devices.notifications", Capability.DEVICE_NOTIFICATIONS, OperationRisk.READ, "Read supported device notifications"),
