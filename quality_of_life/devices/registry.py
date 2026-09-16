@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Iterable
 
 from .models import DeviceResult, DeviceState
@@ -21,10 +20,15 @@ class DeviceRegistry:
 
     def refresh(self) -> DeviceResult:
         discovered: dict[str, tuple[PhoneDeviceProvider, DeviceState]] = {}
+        errors: list[str] = []
         for provider in self._providers:
             try:
                 states = provider.list_devices()
-            except Exception as exc:  # provider boundary: don't crash Jarvis discovery
+            except Exception as exc:
+                errors.append(f"{getattr(provider, 'name', type(provider).__name__)}: {exc}")
+                for device_id, (known_provider, known_state) in self._devices.items():
+                    if known_provider is provider:
+                        discovered[device_id] = (provider, known_state)
                 continue
             for state in states:
                 existing = discovered.get(state.device_id)
@@ -37,6 +41,12 @@ class DeviceRegistry:
         self._devices = discovered
         if self._active_id not in self._devices:
             self._active_id = next(iter(self._devices), None)
+        if errors:
+            return DeviceResult.success(
+                "device registry refreshed with provider errors",
+                count=len(self._devices),
+                errors=tuple(errors),
+            )
         return DeviceResult.success("device registry refreshed", count=len(self._devices))
 
     def list(self) -> tuple[DeviceState, ...]:
