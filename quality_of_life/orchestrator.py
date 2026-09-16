@@ -52,6 +52,7 @@ class QoLOrchestrator:
             "devices.notifications": self._device_tool.notifications,
             "devices.files": self._device_tool.transfer,
             "devices.apps": self._device_tool.open_app,
+            "devices.automate": self._device_tool.automate,
         }
         return actions.get(operation)
 
