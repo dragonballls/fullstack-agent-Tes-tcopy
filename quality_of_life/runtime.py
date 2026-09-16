@@ -54,6 +54,13 @@ class JarvisRuntime:
             return lambda: target()
         if name in {"files", "applications", "processes", "system"}:
             return lambda: target(self.policy)
+        if name == "devices":
+            def device_confirmation(operation: str) -> bool:
+                if self.confirmation is None:
+                    return False
+                capability = QoLOrchestrator.policy_operation_capability(operation)
+                return self.confirmation(capability, operation)
+            return lambda: target(self.policy, confirmation=device_confirmation)
         if name == "scheduler":
             return lambda: target(self._tool("background"))
         if name == "gods_eye":
@@ -64,7 +71,11 @@ class JarvisRuntime:
         if name == "hand_control_runtime":
             return lambda: target()
         if name == "hand_control":
-            return lambda: target(enabled=False, controller=self._tool("computer"))
+            return lambda: target(
+                enabled=False,
+                controller=self._tool("computer"),
+                device_adapter=self._tool("devices").input_adapter,
+            )
         if name == "hand_control_server":
             return lambda: target
         if name == "background":
@@ -87,7 +98,7 @@ class JarvisRuntime:
             configured_repo = os.environ.get("JARVIS_SELF_CODING_REPO")
             if not configured_repo:
                 raise RuntimeError("self-coding is not configured; set JARVIS_SELF_CODING_REPO")
-            return lambda: SelfCodingAgent(SelfCodingConfig(repo=Path(configured_repo), push_branch=os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"}, max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))), backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto")))
+            return lambda: SelfCodingAgent(SelfCodingConfig(repo=Path(configured_repo), push_branch=os.environ.get("JARVIS_SELF_CODING_PUSH", "0").strip().lower() in {"1", "true", "yes", "on"}), max_passes=max(1, int(os.environ.get("JARVIS_SELF_CODING_MAX_PASSES", "1"))), backend=os.environ.get("JARVIS_SELF_CODING_BACKEND", "auto"))
         if name == "windows_maintenance":
             from windows_maintenance import MaintenanceFacade
             return lambda: MaintenanceFacade()
@@ -194,50 +205,48 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.LOCATION_WRITE, "locations.delete", lambda name, confirmed=False: self._delete_saved_location(name, confirmed=confirmed)))
         self.orchestrator.register(Action(Capability.SYSTEM_DIAGNOSTICS, "windows_maintenance.diagnose", lambda: self._tool("windows_maintenance").diagnose()))
         self.orchestrator.register(Action(Capability.SYSTEM_MAINTENANCE, "windows_maintenance.handle", lambda request, confirmed=False: self._tool("windows_maintenance").handle(request, confirmed=confirmed)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.list", lambda: self._tool("devices").list()))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.refresh", lambda: self._tool("devices").refresh()))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.state", lambda device_id: self._tool("devices").state(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.select", lambda device_id: self._tool("devices").select(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.active", lambda: self._tool("devices").active()))
+        self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen", lambda device_id: self._tool("devices").screen(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.input", lambda device_id, kind, **kwargs: self._tool("devices").input(device_id, kind, confirmed=True, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_NOTIFICATIONS, "devices.notifications", lambda device_id: self._tool("devices").notifications(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_FILES, "devices.files", lambda device_id, direction, path, **kwargs: self._tool("devices").transfer(device_id, direction, path, confirmed=True, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_APPS, "devices.apps", lambda device_id, app_id, **kwargs: self._tool("devices").open_app(device_id, app_id, confirmed=True, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_AUTOMATION, "devices.automate", lambda device_id, steps, **kwargs: self._tool("devices").automate(device_id, steps, confirmed=True, **kwargs)))
+        self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.hand_target", lambda device_id: self._set_hand_target(device_id)))
 
-    def _start_hand_control(self) -> dict[str, object]:
-        runtime = self._tool("hand_control_runtime")
-        started = runtime.start()
-        return {"enabled": bool(started and runtime.enabled), "url": runtime.url, "started": bool(started)}
+    def _start_hand_control(self) -> Any:
+        return self._tool("hand_control").start()
 
-    def _stop_hand_control(self) -> dict[str, object]:
-        runtime = self._tool("hand_control_runtime")
-        runtime.stop()
-        return {"enabled": False, "url": runtime.url, "stopped": True}
+    def _stop_hand_control(self) -> Any:
+        return self._tool("hand_control").stop()
 
-    def _account_provider(self, provider: str | ServiceProvider) -> ServiceProvider:
-        if isinstance(provider, ServiceProvider):
-            return provider
-        try:
-            return ServiceProvider(str(provider).strip().lower())
-        except ValueError as exc:
-            raise ValueError(f"unsupported account provider: {provider}") from exc
+    def _set_hand_target(self, device_id: str | None) -> Any:
+        if device_id is not None and self._tool("devices").registry.provider_for(device_id) is None:
+            raise LookupError(f"No device found for: {device_id}")
+        self._tool("hand_control").set_device_target(device_id)
+        return {"target_device_id": device_id}
 
-    def _select_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        identity = self._tool("account_manager").select_account(self._account_provider(provider), account_id=account_id, label=label)
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value}
+    def _select_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").select_account(provider, account_id=account_id, label=label)
 
-    def _connect_account(self, provider: str | ServiceProvider, *, login_hint: str | None = None) -> dict[str, str]:
-        connection = self._tool("account_manager").connect_account(self._account_provider(provider), login_hint=login_hint)
-        identity = connection.identity
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": connection.authorization_state}
+    def _connect_account(self, provider: str, *, login_hint: str | None = None) -> Any:
+        return self._tool("account_manager").connect(provider, login_hint=login_hint)
 
-    def _refresh_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        identity = self._tool("account_manager").refresh_account(self._account_provider(provider), account_id=account_id, label=label)
-        return {"provider": identity.provider.value, "account_id": identity.account_id, "label": identity.label, "state": identity.state.value, "refreshed": "true"}
+    def _refresh_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").refresh(provider, account_id=account_id, label=label)
 
-    def _disconnect_account(self, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None) -> dict[str, str]:
-        normalized = self._account_provider(provider)
-        selected = self._tool("account_manager").select_account(normalized, account_id=account_id, label=label)
-        self._tool("account_manager").disconnect_account(normalized, account_id=selected.account_id)
-        return {"provider": normalized.value, "account_id": selected.account_id, "disconnected": "true"}
+    def _disconnect_account(self, provider: str, *, account_id: str | None = None, label: str | None = None) -> Any:
+        return self._tool("account_manager").disconnect(provider, account_id=account_id, label=label)
 
-    def _service_account_action(self, operation: str, provider: str | ServiceProvider, *, account_id: str | None = None, label: str | None = None, payload: dict[str, Any] | None = None, confirmed: bool = False) -> Any:
-        return self._tool("account_manager").service_action(operation, provider=self._account_provider(provider), account_id=account_id, label=label, payload=payload, confirmed=confirmed)
+    def _service_account_action(self, operation: str, provider: str, *, account_id: str | None = None, label: str | None = None, payload: dict[str, Any] | None = None, confirmed: bool = False) -> Any:
+        return self._tool("account_manager").service_action(operation, provider, account_id=account_id, label=label, payload=payload, confirmed=confirmed)
 
-    def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> dict[str, str]:
-        from .account_access import GitHubRepositoryClient
-        return GitHubRepositoryClient().fork_repository(repository, account_id=account_id, access=self._tool("account_access"), confirmed=True, organization=organization)
+    def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> Any:
+        return self._tool("account_access").github_fork(repository, account_id=account_id, organization=organization)
 
     def _first_place(self, query: str) -> tuple[GodsEye, Place]:
         eye = self._tool("gods_eye")
@@ -274,6 +283,21 @@ class JarvisRuntime:
             raise PermissionError("Deleting a saved location requires confirmation")
         return self._tool("locations").delete(name)
 
+    def _resolve_device(self, reference: str) -> str:
+        value = reference.strip()
+        if not value:
+            raise ValueError("device reference must not be empty")
+        devices = list(self._tool("devices").list())
+        exact = [d for d in devices if d.device_id == value]
+        if exact:
+            return exact[0].device_id
+        matches = [d for d in devices if d.label.casefold() == value.casefold()]
+        if len(matches) == 1:
+            return matches[0].device_id
+        if len(matches) > 1:
+            raise ValueError(f"Multiple devices match: {reference}")
+        raise LookupError(f"No device found for: {reference}")
+
     def dispatch(self, capability: Capability, operation: str, *args: Any, **kwargs: Any) -> Any:
         return self.orchestrator.run(capability, operation, *args, confirmation=self.confirmation, **kwargs)
 
@@ -290,6 +314,27 @@ class JarvisRuntime:
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.start")}
         if intent.kind == "hand_control_stop":
             return {"intent": intent, "result": self.dispatch(Capability.MOUSE_CONTROL, "hand_control.stop")}
+        if intent.kind == "device_hand_target":
+            reference = intent.arguments.get("device")
+            device_id = self._resolve_device(str(reference)) if reference else None
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_INPUT, "devices.hand_target", device_id)}
+        if intent.kind == "device_list":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.list")}
+        if intent.kind == "device_refresh":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.refresh")}
+        if intent.kind == "device_select":
+            device_id = self._resolve_device(str(intent.arguments["device"]))
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.select", device_id)}
+        if intent.kind == "device_screen":
+            reference = intent.arguments.get("device")
+            if reference:
+                device_id = self._resolve_device(str(reference))
+            else:
+                active = self.dispatch(Capability.DEVICE_READ, "devices.active")
+                if not active.ok:
+                    return {"intent": intent, "result": active}
+                device_id = active.data["state"].device_id
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_SCREEN, "devices.screen", device_id)}
         if intent.kind == "browser_open":
             browser = str(intent.arguments["browser"])
             url = intent.arguments.get("url")

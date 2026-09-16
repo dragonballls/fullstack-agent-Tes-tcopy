@@ -5,6 +5,8 @@ from quality_of_life.account_access import AccountGrant, AccountProvider, Accoun
 from quality_of_life.gods_eye import GeoPoint, LocationSnapshot, Place
 from quality_of_life.permissions import Capability, CapabilityDenied, CapabilityPolicy
 from quality_of_life.runtime import JarvisRuntime
+from quality_of_life.devices.fake_provider import FakePhoneProvider
+from quality_of_life.devices.models import DeviceCapability, DeviceState
 
 
 class FakeEye:
@@ -51,9 +53,26 @@ class JarvisRuntimeTests(unittest.TestCase):
         policy = CapabilityPolicy(frozenset({Capability.LOCATION_READ}))
         runtime = JarvisRuntime(policy, factories={"gods_eye": lambda: FakeEye()})
         names = set(runtime.available_tools())
-        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance", "account_access"} <= names)
+        self.assertTrue({"computer", "screen", "browser", "clipboard", "windows", "background", "cloud_router", "gods_eye", "windows_maintenance", "account_access", "devices"} <= names)
         places = runtime.dispatch(Capability.LOCATION_READ, "gods_eye.search", query="Tokyo")
         self.assertEqual(places[0].name, "Tokyo")
+
+    def test_device_runtime_commands_use_existing_capability_policy(self):
+        provider = FakePhoneProvider()
+        provider.add_device(
+            DeviceState("main-1", "Main Phone", True, 88, True),
+            frozenset({DeviceCapability.STATE_READ, DeviceCapability.SCREEN_VIEW}),
+        )
+        policy = CapabilityPolicy(frozenset({Capability.DEVICE_READ, Capability.DEVICE_SCREEN}))
+        device_tool = lambda: __import__("quality_of_life.devices.runtime", fromlist=["DeviceTool"]).DeviceTool(policy, providers=(provider,))
+        runtime = JarvisRuntime(policy, factories={"devices": device_tool})
+        listed = runtime.handle_text("list my phones")
+        self.assertEqual([item.device_id for item in listed["result"]], ["main-1"])
+        selected = runtime.handle_text("switch to my phone Main Phone")
+        self.assertTrue(selected["result"].ok)
+        screened = runtime.handle_text("show my phone")
+        self.assertTrue(screened["result"].ok)
+        self.assertEqual(provider.operations[-1][0], "screen")
 
     def test_runtime_defaults_cloud_router_to_omniroute(self):
         old = {name: os.environ.get(name) for name in ("JARVIS_CLOUD_BASE_URL", "JARVIS_CLOUD_MODEL", "JARVIS_OMNIROUTE_ENABLED")}

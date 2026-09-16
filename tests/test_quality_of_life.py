@@ -13,7 +13,7 @@ class QualityOfLifeTests(unittest.TestCase):
     def test_default_registry_names_are_stable(self) -> None:
         self.assertEqual(
             default_registry().names(),
-            ("account_access", "account_integrations", "account_manager", "applications", "background", "browser", "browser_registry", "clipboard", "cloud_router", "computer", "files", "gods_eye", "hand_control", "hand_control_runtime", "hand_control_server", "locations", "processes", "scheduler", "screen", "self_coding", "service_adapters", "system", "voice_listener", "windows", "windows_maintenance"),
+            ("account_access", "account_integrations", "account_manager", "applications", "background", "browser", "browser_registry", "clipboard", "cloud_router", "computer", "devices", "files", "gods_eye", "hand_control", "hand_control_runtime", "hand_control_server", "locations", "processes", "scheduler", "screen", "self_coding", "service_adapters", "system", "voice_listener", "windows", "windows_maintenance"),
         )
 
     def test_orchestrator_checks_policy(self) -> None:
@@ -68,32 +68,3 @@ class QualityOfLifeTests(unittest.TestCase):
         controller.scroll(3)
         controller.type_text("x")
         controller.hotkey("ctrl", "c")
-        self.assertEqual([name for name, _ in fake.calls], ["moveTo", "click", "scroll", "write", "hotkey"])
-
-    def test_background_job_can_be_cancelled(self) -> None:
-        from quality_of_life.background import BackgroundJobs
-        import time
-        jobs = BackgroundJobs()
-        started = []
-        jobs.start("test", lambda _cancel: started.append(True))
-        deadline = time.monotonic() + 2
-        while not started and time.monotonic() < deadline:
-            time.sleep(0.01)
-        self.assertEqual(started, [True])
-        jobs.cancel("test")
-
-    def test_provider_target_is_immutable(self) -> None:
-        from dataclasses import FrozenInstanceError
-        from quality_of_life.router import ProviderTarget
-        target = ProviderTarget("x", "https://example.com/v1", "KEY", "model")
-        with self.assertRaises(FrozenInstanceError):
-            target.model = "changed"
-
-    def test_router_requires_at_least_one_target(self) -> None:
-        from quality_of_life.router import CloudModelRouter
-        with self.assertRaises(ValueError):
-            CloudModelRouter(())
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -50,6 +50,7 @@ def default_registry() -> ToolRegistry:
     registry.register(ToolSpec("clipboard", "Bounded clipboard text read/write", "quality_of_life.clipboard.ClipboardController"))
     registry.register(ToolSpec("cloud_router", "Ordered cloud-provider failover", "quality_of_life.router.CloudModelRouter"))
     registry.register(ToolSpec("computer", "Windows mouse, keyboard, scrolling, and app launch", "quality_of_life.computer.ComputerController"))
+    registry.register(ToolSpec("devices", "Real Android devices through authorized device providers; supports multi-device state, screen, input, apps, and files", "quality_of_life.devices.runtime.DeviceTool"))
     registry.register(ToolSpec("hand_control", "Optional webcam hand tracking bridged to guarded computer input", "quality_of_life.hand_control.HandControlBridge"))
     registry.register(ToolSpec("hand_control_runtime", "Isolated lifecycle manager for optional webcam hand control", "quality_of_life.hand_control_runtime.HandControlRuntime"))
     registry.register(ToolSpec("hand_control_server", "Loopback-only webcam hand-control bridge", "quality_of_life.hand_control_server.HandControlHandler"))
