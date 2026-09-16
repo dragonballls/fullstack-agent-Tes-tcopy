@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.IBinder;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -142,21 +143,25 @@ public final class CompanionService extends Service {
         String action = payload.optString("action", "").trim();
         if (action.isEmpty()) return JsonUtil.error("INVALID", "action is required");
         JarvisAccessibilityService accessibility = JarvisAccessibilityService.getInstance();
-        if ("home".equals(action)) {
-            if (accessibility == null || !accessibility.performGlobalAction(AccessibilityServiceAction.HOME)) return JsonUtil.error("UNAVAILABLE", "accessibility action unavailable");
-            return JsonUtil.ok(new JSONObject().put("action", action));
+        try {
+            if ("home".equals(action)) {
+                if (accessibility == null || !accessibility.performGlobalAction(AccessibilityServiceAction.HOME)) return JsonUtil.error("UNAVAILABLE", "accessibility action unavailable");
+                return JsonUtil.ok(new JSONObject().put("action", action));
+            }
+            if ("back".equals(action)) {
+                if (accessibility == null || !accessibility.performGlobalAction(AccessibilityServiceAction.BACK)) return JsonUtil.error("UNAVAILABLE", "accessibility action unavailable");
+                return JsonUtil.ok(new JSONObject().put("action", action));
+            }
+            if ("click_text".equals(action)) {
+                String text = payload.optString("text", "").trim();
+                if (text.isEmpty()) return JsonUtil.error("INVALID", "text is required");
+                if (accessibility == null || !accessibility.clickText(text)) return JsonUtil.error("NOT_FOUND", "no clickable matching text found");
+                return JsonUtil.ok(new JSONObject().put("action", action).put("text", text));
+            }
+            return JsonUtil.error("UNSUPPORTED", "unsupported companion action");
+        } catch (JSONException exc) {
+            return JsonUtil.error("ERROR", "unable to build companion action response");
         }
-        if ("back".equals(action)) {
-            if (accessibility == null || !accessibility.performGlobalAction(AccessibilityServiceAction.BACK)) return JsonUtil.error("UNAVAILABLE", "accessibility action unavailable");
-            return JsonUtil.ok(new JSONObject().put("action", action));
-        }
-        if ("click_text".equals(action)) {
-            String text = payload.optString("text", "").trim();
-            if (text.isEmpty()) return JsonUtil.error("INVALID", "text is required");
-            if (accessibility == null || !accessibility.clickText(text)) return JsonUtil.error("NOT_FOUND", "no clickable matching text found");
-            return JsonUtil.ok(new JSONObject().put("action", action).put("text", text));
-        }
-        return JsonUtil.error("UNSUPPORTED", "unsupported companion action");
     }
 
     private void write(OutputStream output, int status, String body) throws IOException {
