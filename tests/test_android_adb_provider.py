@@ -2,8 +2,22 @@ import subprocess
 import unittest
 
 from quality_of_life.devices.android_adb import AndroidAdbProvider
-from quality_of_life.devices.models import DeviceCapability
+from quality_of_life.devices.models import DeviceCapability, DeviceResult
 from quality_of_life.devices.provider import DeviceInputEvent, FileTransferDirection
+
+
+class FakeMirrorManager:
+    def __init__(self):
+        self.calls = []
+        self.stop_all_called = False
+
+    def start(self, device_id, label):
+        self.calls.append((device_id, label))
+        return DeviceResult.success("mirror started", device_id=device_id, label=label)
+
+    def stop_all(self):
+        self.stop_all_called = True
+        return ()
 
 
 class AndroidAdbProviderTests(unittest.TestCase):
@@ -63,6 +77,15 @@ class AndroidAdbProviderTests(unittest.TestCase):
         self.assertEqual(result.code, "UNAVAILABLE")
         self.assertIn(DeviceCapability.SCREEN_VIEW, self.provider.capabilities("ABC123"))
         self.assertNotIn(DeviceCapability.SCREEN_VIEW, no_screen.capabilities("ABC123"))
+
+    def test_live_screen_uses_injected_mirror_manager(self):
+        mirror = FakeMirrorManager()
+        provider = AndroidAdbProvider(adb="adb", scrcpy="scrcpy", runner=self.provider._runner, enable_companion=False, mirror_manager=mirror)
+        result = provider.view_screen("ABC123")
+        self.assertTrue(result.ok)
+        self.assertEqual(mirror.calls, [("ABC123", "ABC123")])
+        provider.close()
+        self.assertTrue(mirror.stop_all_called)
 
 
 if __name__ == "__main__":

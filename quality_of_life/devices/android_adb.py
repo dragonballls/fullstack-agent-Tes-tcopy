@@ -9,7 +9,6 @@ accessibility-backed phone-native actions through an ADB-local forward.
 from __future__ import annotations
 
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -17,6 +16,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 
 from .android_companion import AndroidCompanionClient
+from .mirror import MultiDeviceMirrorManager
 from .models import DeviceCapability, DeviceResult, DeviceState
 from .provider import DeviceInputEvent, FileTransferDirection
 
@@ -34,6 +34,7 @@ class AndroidAdbProvider:
         runner: Runner | None = None,
         enable_companion: bool = True,
         companion: AndroidCompanionClient | None = None,
+        mirror_manager: MultiDeviceMirrorManager | None = None,
     ):
         self.adb = adb or shutil.which("adb")
         self.scrcpy = scrcpy or shutil.which("scrcpy")
@@ -41,6 +42,7 @@ class AndroidAdbProvider:
         self.companion = companion if companion is not None else (
             AndroidCompanionClient(self.adb, runner=self._runner) if enable_companion else None
         )
+        self.mirror_manager = mirror_manager or MultiDeviceMirrorManager(self.scrcpy)
 
     @staticmethod
     def _run(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -154,19 +156,14 @@ class AndroidAdbProvider:
         return DeviceResult.success("device command completed", stdout=result.stdout)
 
     def view_screen(self, device_id: str) -> DeviceResult:
-        if not self.scrcpy:
-            return DeviceResult.failure("UNAVAILABLE", "scrcpy is not installed; live device view is unavailable")
         state = self._state(device_id)
         if state is None:
             return DeviceResult.failure("NOT_FOUND", "Device is not connected through adb")
         if not state.connected:
             return DeviceResult.failure("DISCONNECTED", "Device is not ready")
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if platform.system() == "Windows" else 0
-        try:
-            subprocess.Popen((self.scrcpy, "--serial", device_id), creationflags=creationflags)
-        except OSError as exc:
-            return DeviceResult.failure("UNAVAILABLE", f"scrcpy could not start: {exc}")
-        return DeviceResult.success("live device view started", device_id=device_id)
+        if not self.scrcpy:
+            return DeviceResult.failure("UNAVAILABLE", "scrcpy is not installed; live device view is unavailable")
+        return self.mirror_manager.start(device_id, state.label)
 
     def send_input(self, device_id: str, event: DeviceInputEvent) -> DeviceResult:
         if event.kind == "tap":
@@ -193,8 +190,7 @@ class AndroidAdbProvider:
     def read_notifications(self, device_id: str) -> DeviceResult:
         if self.companion is None:
             return DeviceResult.failure("UNAVAILABLE", "Jarvis Android companion is not configured")
-        result = self.companion.notifications(device_id)
-        return result
+        return self.companion.notifications(device_id)
 
     def transfer_file(self, device_id: str, direction: FileTransferDirection, path: str) -> DeviceResult:
         if not path.strip():
@@ -211,5 +207,6 @@ class AndroidAdbProvider:
         return self._command(device_id, "shell", "monkey", "-p", app_id, "1")
 
     def close(self) -> None:
+        self.mirror_manager.stop_all()
         if self.companion is not None:
             self.companion.close()
