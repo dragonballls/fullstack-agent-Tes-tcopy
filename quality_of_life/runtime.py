@@ -211,6 +211,7 @@ class JarvisRuntime:
         self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.select", lambda device_id: self._tool("devices").select(device_id)))
         self.orchestrator.register(Action(Capability.DEVICE_READ, "devices.active", lambda: self._tool("devices").active()))
         self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen", lambda device_id: self._tool("devices").screen(device_id)))
+        self.orchestrator.register(Action(Capability.DEVICE_SCREEN, "devices.screen_all", lambda: self._tool("devices").screen_all()))
         self.orchestrator.register(Action(Capability.DEVICE_INPUT, "devices.input", lambda device_id, kind, **kwargs: self._tool("devices").input(device_id, kind, confirmed=True, **kwargs)))
         self.orchestrator.register(Action(Capability.DEVICE_NOTIFICATIONS, "devices.notifications", lambda device_id: self._tool("devices").notifications(device_id)))
         self.orchestrator.register(Action(Capability.DEVICE_FILES, "devices.files", lambda device_id, direction, path, **kwargs: self._tool("devices").transfer(device_id, direction, path, confirmed=True, **kwargs)))
@@ -248,23 +249,17 @@ class JarvisRuntime:
     def _github_fork(self, repository: str, *, account_id: str = "primary", organization: str | None = None) -> Any:
         return self._tool("account_access").github_fork(repository, account_id=account_id, organization=organization)
 
-    def _first_place(self, query: str) -> tuple[GodsEye, Place]:
-        eye = self._tool("gods_eye")
-        places = eye.search(query)
+    def _first_place(self, query: str) -> tuple[Any, Place]:
+        places = self._tool("gods_eye").search(query)
         if not places:
-            raise LookupError(f"No location found for: {query}")
-        return eye, places[0]
+            raise LookupError(f"No place found for: {query}")
+        return query, places[0]
 
-    def _open_place(self, query: str) -> dict[str, object]:
-        eye, place = self._first_place(query)
-        return eye.open_place(place)
+    def _open_place(self, query: str) -> Any:
+        return self._tool("gods_eye").open_place(query)
 
-    def _route_to(self, query: str) -> dict[str, object]:
-        eye, place = self._first_place(query)
-        snapshot = eye.locate_me()
-        if not snapshot.permitted or snapshot.point is None:
-            raise PermissionError("Current location is unavailable; enable location access before routing")
-        return eye.route(snapshot.point, place)
+    def _route_to(self, query: str) -> Any:
+        return self._tool("gods_eye").route_to(query)
 
     def _save_location(self, name: str, latitude: float, longitude: float, *, address: str | None = None, accuracy_m: float | None = None, source: str = "user", confirmed: bool = False) -> Any:
         if not confirmed:
@@ -325,6 +320,8 @@ class JarvisRuntime:
         if intent.kind == "device_select":
             device_id = self._resolve_device(str(intent.arguments["device"]))
             return {"intent": intent, "result": self.dispatch(Capability.DEVICE_READ, "devices.select", device_id)}
+        if intent.kind == "device_screen_all":
+            return {"intent": intent, "result": self.dispatch(Capability.DEVICE_SCREEN, "devices.screen_all")}
         if intent.kind == "device_screen":
             reference = intent.arguments.get("device")
             if reference:
