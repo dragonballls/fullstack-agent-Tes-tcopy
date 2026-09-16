@@ -70,6 +70,15 @@ OPERATION_CATALOG: tuple[OperationSpec, ...] = (
     OperationSpec("self_coding.run", Capability.REPO_WRITE, OperationRisk.EXTERNAL, "Run guarded repository coding"),
     OperationSpec("windows_maintenance.diagnose", Capability.SYSTEM_DIAGNOSTICS, OperationRisk.READ, "Diagnose Windows state"),
     OperationSpec("windows_maintenance.handle", Capability.SYSTEM_MAINTENANCE, OperationRisk.DESTRUCTIVE, "Perform a guarded Windows maintenance action"),
+    OperationSpec("devices.list", Capability.DEVICE_READ, OperationRisk.READ, "List authorized physical devices"),
+    OperationSpec("devices.state", Capability.DEVICE_READ, OperationRisk.READ, "Read selected device state"),
+    OperationSpec("devices.select", Capability.DEVICE_READ, OperationRisk.MUTATE, "Select the active physical device"),
+    OperationSpec("devices.screen", Capability.DEVICE_SCREEN, OperationRisk.READ, "View the actual device screen when supported"),
+    OperationSpec("devices.input", Capability.DEVICE_INPUT, OperationRisk.MUTATE, "Send an input event to a physical device"),
+    OperationSpec("devices.notifications", Capability.DEVICE_NOTIFICATIONS, OperationRisk.READ, "Read supported device notifications"),
+    OperationSpec("devices.files", Capability.DEVICE_FILES, OperationRisk.EXTERNAL, "Transfer a file with a physical device"),
+    OperationSpec("devices.apps", Capability.DEVICE_APPS, OperationRisk.EXTERNAL, "Open a supported application on a physical device"),
+    OperationSpec("devices.automate", Capability.DEVICE_AUTOMATION, OperationRisk.EXTERNAL, "Run a guarded automation against a physical device"),
 )
 
 
