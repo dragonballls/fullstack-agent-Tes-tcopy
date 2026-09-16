@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.LinkedList;
@@ -42,7 +43,11 @@ public final class JarvisNotificationListener extends NotificationListenerServic
     public synchronized JSONArray snapshot() {
         JSONArray result = new JSONArray();
         for (JSONObject item : recent) {
-            result.put(new JSONObject(item.toString()));
+            try {
+                result.put(new JSONObject(item.toString()));
+            } catch (JSONException exc) {
+                // Stored entries are created locally; skip an unexpectedly malformed copy.
+            }
         }
         return result;
     }
@@ -52,16 +57,20 @@ public final class JarvisNotificationListener extends NotificationListenerServic
         Notification notification = sbn.getNotification();
         CharSequence title = notification.extras != null ? notification.extras.getCharSequence(Notification.EXTRA_TITLE) : null;
         CharSequence text = notification.extras != null ? notification.extras.getCharSequence(Notification.EXTRA_TEXT) : null;
-        JSONObject item = new JSONObject()
-                .put("package", sbn.getPackageName())
-                .put("title", title == null ? "" : title.toString())
-                .put("text", text == null ? "" : text.toString())
-                .put("id", sbn.getId())
-                .put("posted_ms", sbn.getPostTime());
-        recent.removeIf(existing -> existing.optInt("id", -1) == sbn.getId() && existing.optString("package").equals(sbn.getPackageName()));
-        recent.addFirst(item);
-        while (recent.size() > MAX_ITEMS) {
-            recent.removeLast();
+        try {
+            JSONObject item = new JSONObject()
+                    .put("package", sbn.getPackageName())
+                    .put("title", title == null ? "" : title.toString())
+                    .put("text", text == null ? "" : text.toString())
+                    .put("id", sbn.getId())
+                    .put("posted_ms", sbn.getPostTime());
+            recent.removeIf(existing -> existing.optInt("id", -1) == sbn.getId() && existing.optString("package").equals(sbn.getPackageName()));
+            recent.addFirst(item);
+            while (recent.size() > MAX_ITEMS) {
+                recent.removeLast();
+            }
+        } catch (JSONException exc) {
+            // Do not let one malformed notification break the listener service.
         }
     }
 }
