@@ -138,8 +138,19 @@ Implement the goal directly, then leave the repository in a clean, testable stat
             raise SelfCodingError("Unable to verify the post-test Git state.")
 
     def _rollback(self, baseline: str) -> None:
-        self._git("reset", "--hard", baseline)
-        self._git("clean", "-fd")
+        reset = self._git("reset", "--hard", baseline)
+        if reset.returncode != 0:
+            raise SelfCodingError(reset.stderr.strip() or "Rollback failed while resetting the repository.")
+
+        clean = self._git("clean", "-fd")
+        if clean.returncode != 0:
+            raise SelfCodingError(clean.stderr.strip() or "Rollback failed while cleaning untracked files.")
+
+        status = self._git("status", "--porcelain")
+        if status.returncode != 0:
+            raise SelfCodingError(status.stderr.strip() or "Rollback verification failed while checking Git status.")
+        if status.stdout.strip():
+            raise SelfCodingError("Rollback verification failed: repository is still dirty.")
 
     def run(self, goal: str) -> str:
         """Implement one or more safe passes and return the resulting branch."""
