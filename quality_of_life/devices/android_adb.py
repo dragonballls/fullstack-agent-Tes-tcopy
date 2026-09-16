@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 from collections.abc import Callable, Sequence
@@ -110,6 +111,21 @@ class AndroidAdbProvider:
         if self.scrcpy:
             capabilities.add(DeviceCapability.SCREEN_VIEW)
         return frozenset(capabilities)
+
+    def display_size(self, device_id: str) -> tuple[int, int] | None:
+        state = self._state(device_id)
+        if state is None or not state.connected:
+            return None
+        result = self._adb("-s", device_id, "shell", "wm", "size")
+        if isinstance(result, DeviceResult) or result.returncode != 0:
+            return None
+        matches = re.findall(r"(\d+)x(\d+)", result.stdout)
+        if not matches:
+            return None
+        width, height = map(int, matches[-1])
+        if width <= 0 or height <= 0:
+            return None
+        return width, height
 
     def _command(self, device_id: str, *args: str) -> DeviceResult:
         state = self._state(device_id)
