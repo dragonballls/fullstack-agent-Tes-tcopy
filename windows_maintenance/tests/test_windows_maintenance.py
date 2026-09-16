@@ -41,3 +41,5 @@ class WindowsMaintenanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# CI verification marker: exercise all push-triggered validation workflows.
